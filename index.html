@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madspild Registrering</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
+  h2 { text-align: center; }
+  table { width:100%; border-collapse: collapse; margin-top:10px; }
+  th, td { border:1px solid #ccc; padding:6px; text-align:left; }
+  input[type="text"], input[type="number"] { width:100%; box-sizing:border-box; }
+  button { margin:5px; padding:6px 10px; }
+  .sum { font-weight:bold; text-align:right; margin-top:10px;}
+</style>
+</head>
+<body>
+
+<h2>Madspild – <span id="dato"></span></h2>
+<div style="text-align:center">
+  <button id="prevBtn">← Forrige dag</button>
+  <button id="nextBtn">Næste dag →</button>
+</div>
+
+<table id="table">
+  <thead>
+    <tr><th>Beskrivelse</th><th>Vægt (kg)</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<button id="addBtn">+ Tilføj række</button>
+<div class="sum">Total: <span id="total">0</span> kg</div>
+<div style="text-align:center;margin-top:10px">
+  <button id="saveBtn">Gem</button>
+</div>
+
+<script>
+const scriptUrl = "https://script.google.com/macros/s/AKfycbw01AhjENLmxT3mx_TWIvY5NOdThpZacmXSZSWcgAauokcdQz1Ni6-PgSVnp0j-Rz7vzg/exec"; // <-- indsæt din Web App URL
+let currentDate = new Date();
+let allData = [];
+
+function formatDate(d) {
+  return d.toISOString().split('T')[0];
+}
+function isWeekend(date) {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+function adjustToWeekday(date, direction=0) {
+  while (isWeekend(date)) {
+    date.setDate(date.getDate() + (direction || 1));
+  }
+  return date;
+}
+
+function loadData() {
+  fetch(scriptUrl)
+    .then(r => r.json())
+    .then(rows => {
+      allData = rows.slice(1);
+      showDay(currentDate);
+    })
+    .catch(e => console.error("Kan ikke hente data:", e));
+}
+
+function showDay(date) {
+  const dateStr = formatDate(date);
+  document.getElementById("dato").textContent = dateStr;
+  const tbody = document.querySelector("#table tbody");
+  tbody.innerHTML = "";
+  const dayRows = allData.filter(r => r[0] === dateStr);
+  dayRows.forEach(r => addRow(r[1], r[2]));
+  updateTotal();
+}
+
+function addRow(desc="", weight="") {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input type="text" value="${desc}"></td>
+    <td><input type="number" step="0.01" value="${weight}"></td>
+    <td><button onclick="this.closest('tr').remove();updateTotal()">✕</button></td>
+  `;
+  document.querySelector("#table tbody").appendChild(tr);
+  updateTotal();
+}
+
+function updateTotal() {
+  let sum = 0;
+  document.querySelectorAll("#table tbody tr").forEach(tr => {
+    const val = parseFloat(tr.cells[1].querySelector("input").value) || 0;
+    sum += val;
+  });
+  document.getElementById("total").textContent = sum.toFixed(2);
+}
+
+function saveData() {
+  const dateStr = formatDate(currentDate);
+  allData = allData.filter(r => r[0] !== dateStr);
+  document.querySelectorAll("#table tbody tr").forEach(tr => {
+    const desc   = tr.cells[0].querySelector("input").value.trim();
+    const weight = tr.cells[1].querySelector("input").value.trim();
+    if (desc || weight) {
+      allData.push([dateStr, desc, weight]);
+    }
+  });
+  const header = [["Dato", "Beskrivelse", "Vægt (kg)"]];
+  const data   = header.concat(allData);
+
+  fetch(scriptUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  })
+  .then(r => r.json())
+  .then(resp => {
+    if (resp && resp.ok) {
+      alert("✅ Dagens registrering gemt!");
+    } else {
+      alert("❌ Fejl ved gemning: " + (resp.error || JSON.stringify(resp)));
+      console.error(resp);
+    }
+  })
+  .catch(e => {
+    console.error("Fejl ved fetch POST:", e);
+    alert("❌ Netværksfejl ved gemning: " + e);
+  });
+}
+
+document.getElementById("addBtn").onclick = () => addRow();
+document.getElementById("saveBtn").onclick = saveData;
+document.getElementById("prevBtn").onclick = () => {
+  currentDate.setDate(currentDate.getDate() - 1);
+  adjustToWeekday(currentDate, -1);
+  showDay(currentDate);
+};
+document.getElementById("nextBtn").onclick = () => {
+  currentDate.setDate(currentDate.getDate() + 1);
+  adjustToWeekday(currentDate, +1);
+  showDay(currentDate);
+};
+document.querySelector("#table").addEventListener("input", updateTotal);
+
+adjustToWeekday(currentDate);
+loadData();
+</script>
+
+</body>
+</html>
