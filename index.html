@@ -125,7 +125,175 @@
     <tr><th>Beskrivelse</th><th>Vægt (kg)</th><th></th></tr>
   </thead>
   <tbody></tbody>
-</table>
+</table><!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madspild Registrering</title>
+<script type="module">
+  // ---- Firebase setup ----
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+  import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+  const firebaseConfig = {
+  apiKey: "AIzaSyBQR9Sn_YjesFMVfZI2QHCFXDZxY_GZayU",
+  authDomain: "madspildsregistrering.firebaseapp.com",
+  databaseURL: "https://madspildsregistrering-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "madspildsregistrering",
+  storageBucket: "madspildsregistrering.firebasestorage.app",
+  messagingSenderId: "344888789541",
+  appId: "1:344888789541:web:117c6bd0d22b395c184dcc",
+  measurementId: "G-ZCK8SMPN0C"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  let currentUser = null;
+  let currentDate = new Date();
+
+  // ---- Login og logout ----
+  document.addEventListener("DOMContentLoaded", () => {
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const userInfo = document.getElementById("userInfo");
+
+    loginBtn.onclick = () => signInWithPopup(auth, provider);
+    logoutBtn.onclick = () => signOut(auth);
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        loginBtn.style.display = "none";
+        logoutBtn.style.display = "inline-block";
+        userInfo.textContent = "Logget ind som " + user.displayName;
+        document.getElementById("app").style.display = "block";
+        loadData();
+      } else {
+        currentUser = null;
+        loginBtn.style.display = "inline-block";
+        logoutBtn.style.display = "none";
+        userInfo.textContent = "Ikke logget ind";
+        document.getElementById("app").style.display = "none";
+      }
+    });
+  });
+
+  // ---- Datahåndtering ----
+  function formatDate(d) {
+    return d.toISOString().split("T")[0];
+  }
+
+  function loadData() {
+    const dateStr = formatDate(currentDate);
+    document.getElementById("dato").textContent = dateStr;
+
+    get(child(ref(db), "madspild/" + dateStr)).then(snapshot => {
+      const tbody = document.querySelector("#table tbody");
+      tbody.innerHTML = "";
+      if (snapshot.exists()) {
+        snapshot.val().forEach(row => addRow(row.beskrivelse, row.vaegt));
+      } else {
+        addRow();
+      }
+      updateSum();
+    });
+  }
+
+  function addRow(beskrivelse = "", vaegt = "") {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="text" value="${beskrivelse}" placeholder="Beskrivelse"></td>
+      <td><input type="number" step="0.01" value="${vaegt}" placeholder="kg" onchange="updateSum()"></td>
+    `;
+    document.querySelector("#table tbody").appendChild(tr);
+  }
+
+  function updateSum() {
+    let sum = 0;
+    document.querySelectorAll("#table tbody tr").forEach(tr => {
+      const val = parseFloat(tr.cells[1].querySelector("input").value);
+      if (!isNaN(val)) sum += val;
+    });
+    document.getElementById("sum").textContent = sum.toFixed(2);
+  }
+
+  window.saveData = function() {
+    if (!currentUser) return alert("Du skal være logget ind for at gemme.");
+
+    const dateStr = formatDate(currentDate);
+    const rows = [];
+    document.querySelectorAll("#table tbody tr").forEach(tr => {
+      const beskrivelse = tr.cells[0].querySelector("input").value.trim();
+      const vaegt = parseFloat(tr.cells[1].querySelector("input").value.trim());
+      if (beskrivelse || !isNaN(vaegt)) rows.push({ beskrivelse, vaegt });
+    });
+
+    set(ref(db, "madspild/" + dateStr), rows)
+      .then(() => alert("✅ Dagens registrering gemt!"))
+      .catch(err => alert("❌ Fejl: " + err));
+  }
+
+  window.prevDay = function() {
+    currentDate.setDate(currentDate.getDate() - 1);
+    loadData();
+  }
+
+  window.nextDay = function() {
+    currentDate.setDate(currentDate.getDate() + 1);
+    loadData();
+  }
+
+</script>
+
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 650px; margin: 20px auto; background: #f9fafb; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  h2 { text-align: center; color: #333; }
+  table { width:100%; border-collapse: collapse; margin-top:10px; }
+  th, td { border:1px solid #ddd; padding:6px; text-align:left; }
+  input[type="text"], input[type="number"] { width:100%; box-sizing:border-box; padding:5px; border-radius:6px; border:1px solid #ccc; }
+  button { margin:5px; padding:8px 14px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; }
+  #prevBtn { background:#4f46e5; color:white; }
+  #nextBtn { background:#22c55e; color:white; }
+  #saveBtn { background:#f97316; color:white; display:block; margin:10px auto; }
+  #loginBtn { background:#2563eb; color:white; }
+  #logoutBtn { background:#dc2626; color:white; }
+  .sum { font-weight:bold; text-align:right; margin-top:10px; }
+  .user-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+</style>
+</head>
+<body>
+
+<div class="user-bar">
+  <div id="userInfo">Ikke logget ind</div>
+  <div>
+    <button id="loginBtn">🔑 Log ind med Google</button>
+    <button id="logoutBtn" style="display:none;">🚪 Log ud</button>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <h2>Madspild – <span id="dato"></span></h2>
+  <div style="text-align:center;">
+    <button id="prevBtn" onclick="prevDay()">⬅ Forrige dag</button>
+    <button id="nextBtn" onclick="nextDay()">Næste dag ➡</button>
+  </div>
+
+  <table id="table">
+    <thead><tr><th>Beskrivelse</th><th>Vægt (kg)</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div class="sum">Total: <span id="sum">0.00</span> kg</div>
+  <button id="saveBtn" onclick="saveData()">💾 Gem</button>
+</div>
+
+</body>
+</html>
+
 
 <button id="addBtn">+ Tilføj række</button>
 <div class="sum">Total: <span id="total">0</span> kg</div>
@@ -226,3 +394,4 @@ showDay(currentDate);
 
 </body>
 </html>
+
