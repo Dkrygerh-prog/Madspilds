@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Madspild Registrering</title>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
+h2 { text-align:center; }
+table { width:100%; border-collapse: collapse; margin-top:10px; }
+th, td { border:1px solid #ccc; padding:6px; text-align:left; }
+input[type="text"], input[type="number"] { width:100%; box-sizing:border-box; }
+button { margin:5px; padding:6px 10px; }
+.sum { font-weight:bold; text-align:right; margin-top:10px;}
+</style>
+</head>
+<body>
+
+<h2>Madspild – <span id="dato"></span></h2>
+<div style="text-align:center">
+  <button id="prevBtn">← Forrige dag</button>
+  <button id="nextBtn">Næste dag →</button>
+</div>
+
+<table id="table">
+  <thead>
+    <tr><th>Beskrivelse</th><th>Vægt (kg)</th><th></th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<button id="addBtn">+ Tilføj række</button>
+<div class="sum">Total: <span id="total">0</span> kg</div>
+<div style="text-align:center;margin-top:10px">
+  <button id="saveBtn">Gem</button>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+// ===== Firebase config =====
+const firebaseConfig = {
+  apiKey: "AIzaSyBQR9Sn_YjesFMVfZI2QHCFXDZxY_GZayU",
+  authDomain: "madspildsregistrering.firebaseapp.com",
+  databaseURL: "https://madspildsregistrering-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "madspildsregistrering",
+  storageBucket: "madspildsregistrering.firebasestorage.app",
+  messagingSenderId: "344888789541",
+  appId: "1:344888789541:web:117c6bd0d22b395c184dcc"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ===== Dato & hverdage =====
+let currentDate = new Date();
+function formatDate(d){ return d.toISOString().split('T')[0]; }
+function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
+function adjustToWeekday(d, dir=0){ while(isWeekend(d)) d.setDate(d.getDate()+(dir||1)); return d; }
+
+// ===== UI =====
+function updateTotal(){
+  let sum=0;
+  document.querySelectorAll("#table tbody tr").forEach(tr=>{
+    const val=parseFloat(tr.cells[1].querySelector("input").value)||0;
+    sum+=val;
+  });
+  document.getElementById("total").textContent=sum.toFixed(2);
+}
+
+function addRow(desc="", weight=""){
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td><input type="text" value="${desc}"></td>
+    <td><input type="number" step="0.01" value="${weight}"></td>
+    <td><button onclick="this.closest('tr').remove();updateTotal()">✕</button></td>
+  `;
+  document.querySelector("#table tbody").appendChild(tr);
+  updateTotal();
+}
+
+// ===== Load & save til Firebase =====
+function showDay(date){
+  const dateStr=formatDate(date);
+  document.getElementById("dato").textContent=dateStr;
+  const tbody=document.querySelector("#table tbody");
+  tbody.innerHTML="";
+  db.ref('madspild/'+dateStr).once('value').then(snap=>{
+    const rows = snap.val();
+    if(rows){
+      rows.forEach(r=>addRow(r.desc,r.weight));
+    }
+    updateTotal();
+  });
+}
+
+function saveData(){
+  const dateStr=formatDate(currentDate);
+  const rows=[];
+  document.querySelectorAll("#table tbody tr").forEach(tr=>{
+    const desc=tr.cells[0].querySelector("input").value.trim();
+    const weight=tr.cells[1].querySelector("input").value.trim();
+    if(desc||weight) rows.push({desc, weight});
+  });
+  db.ref('madspild/'+dateStr).set(rows)
+    .then(()=>alert("✅ Dagens registrering gemt!"))
+    .catch(e=>{console.error(e); alert("❌ Fejl ved gemning!")});
+}
+
+// ===== Event listeners =====
+document.getElementById("addBtn").onclick=()=>addRow();
+document.getElementById("saveBtn").onclick=saveData;
+document.getElementById("prevBtn").onclick=()=>{
+  currentDate.setDate(currentDate.getDate()-1);
+  adjustToWeekday(currentDate,-1);
+  showDay(currentDate);
+};
+document.getElementById("nextBtn").onclick=()=>{
+  currentDate.setDate(currentDate.getDate()+1);
+  adjustToWeekday(currentDate,+1);
+  showDay(currentDate);
+};
+document.querySelector("#table").addEventListener("input",updateTotal);
+
+adjustToWeekday(currentDate);
+showDay(currentDate);
+
+</script>
+</body>
+</html>
