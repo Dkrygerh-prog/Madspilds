@@ -5,118 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Madspild Registrering</title>
 <style>
-  body {
-    font-family: "Segoe UI", sans-serif;
-    max-width: 650px;
-    margin: 30px auto;
-    background: #f8f9fa;
-  }
-  h2 {
-    text-align: center;
-    margin-bottom: 10px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-  th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-  }
-  th {
-    background-color: #f1f1f1;
-  }
-  input[type="text"], input[type="number"] {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 4px;
-  }
-  button {
-    margin: 5px;
-    padding: 8px 14px;
-    font-size: 14px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  #prevBtn, #nextBtn {
-    background-color: #0078d7;
-    color: white;
-  }
-  #prevBtn:hover, #nextBtn:hover {
-    background-color: #005fa3;
-  }
-  #addBtn {
-    background-color: #28a745;
-    color: white;
-  }
-  #addBtn:hover {
-    background-color: #218838;
-  }
-  #saveBtn {
-    background-color: #ff9800;
-    color: white;
-  }
-  #saveBtn:hover {
-    background-color: #e68900;
-  }
-  .sum {
-    font-weight: bold;
-    text-align: right;
-    margin-top: 10px;
-    font-size: 1.1em;
-  }
-  .nav-buttons {
-    text-align: center;
-    margin-bottom: 10px;
-  }
-  .delete-btn {
-    background: #dc3545;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-  }
-  .delete-btn:hover {
-    background: #b02a37;
-  }
+  body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
+  h2 { text-align: center; }
+  table { width:100%; border-collapse: collapse; margin-top:10px; }
+  th, td { border:1px solid #ccc; padding:6px; text-align:left; }
+  input[type="text"], input[type="number"] { width:100%; box-sizing:border-box; }
+  button { margin:5px; padding:6px 10px; }
+  .sum { font-weight:bold; text-align:right; margin-top:10px;}
 </style>
 </head>
 <body>
 
 <h2>Madspild – <span id="dato"></span></h2>
-
-<div class="nav-buttons">
-  <button id="prevBtn">⬅ Forrige dag</button>
-  <button id="nextBtn">Næste dag ➡</button>
+<div style="text-align:center">
+  <button id="prevBtn">← Forrige dag</button>
+  <button id="nextBtn">Næste dag →</button>
 </div>
 
 <table id="table">
   <thead>
-    <tr><th>Beskrivelse</th><th>Vægt (kg)</th><th>Slet</th></tr>
+    <tr><th>Beskrivelse</th><th>Vægt (kg)</th><th></th></tr>
   </thead>
   <tbody></tbody>
 </table>
 
-<div style="text-align:center">
-  <button id="addBtn">＋ Tilføj række</button>
-</div>
-
+<button id="addBtn">+ Tilføj række</button>
 <div class="sum">Total: <span id="total">0</span> kg</div>
-
-<div style="text-align:center;margin-top:15px">
-  <button id="saveBtn">💾 Gem</button>
+<div style="text-align:center;margin-top:10px">
+  <button id="saveBtn">Gem</button>
 </div>
 
 <script>
-// ✅ URL til dit Google Apps Script (med anførselstegn!)
-const scriptUrl = "https://script.google.com/macros/s/AKfycbyalgUBZZcB3xcgPY-1xd6emBKdRy96V78IJGCiAJcETp5Mf9VN2rbiouxqScpFWzJdXA/exec";
-
+const scriptUrl = "DIN_EXEC_URL_HER"; // <-- indsæt din Web App URL
 let currentDate = new Date();
 let allData = [];
 
@@ -159,7 +79,7 @@ function addRow(desc="", weight="") {
   tr.innerHTML = `
     <td><input type="text" value="${desc}"></td>
     <td><input type="number" step="0.01" value="${weight}"></td>
-    <td><button class="delete-btn" onclick="this.closest('tr').remove();updateTotal()">✕</button></td>
+    <td><button onclick="this.closest('tr').remove();updateTotal()">✕</button></td>
   `;
   document.querySelector("#table tbody").appendChild(tr);
   updateTotal();
@@ -189,7 +109,7 @@ function saveData() {
 
   fetch(scriptUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" }, // vigtig linje
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
   })
   .then(r => r.json())
@@ -197,8 +117,8 @@ function saveData() {
     if (resp && resp.ok) {
       alert("✅ Dagens registrering gemt!");
     } else {
-      console.error("Server returnerede fejl:", resp);
-      alert("❌ Fejl ved gemning: " + (resp && resp.error ? resp.error : JSON.stringify(resp)));
+      alert("❌ Fejl ved gemning: " + (resp.error || JSON.stringify(resp)));
+      console.error(resp);
     }
   })
   .catch(e => {
@@ -206,7 +126,6 @@ function saveData() {
     alert("❌ Netværksfejl ved gemning: " + e);
   });
 }
-
 
 document.getElementById("addBtn").onclick = () => addRow();
 document.getElementById("saveBtn").onclick = saveData;
