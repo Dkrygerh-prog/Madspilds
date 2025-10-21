@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Madspild Registrering</title>
+
 <script type="module">
   // ---- Firebase setup ----
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
@@ -11,14 +12,14 @@
   import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
   const firebaseConfig = {
-  apiKey: "AIzaSyBQR9Sn_YjesFMVfZI2QHCFXDZxY_GZayU",
-  authDomain: "madspildsregistrering.firebaseapp.com",
-  databaseURL: "https://madspildsregistrering-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "madspildsregistrering",
-  storageBucket: "madspildsregistrering.firebasestorage.app",
-  messagingSenderId: "344888789541",
-  appId: "1:344888789541:web:117c6bd0d22b395c184dcc",
-  measurementId: "G-ZCK8SMPN0C"
+    apiKey: "AIzaSyBQR9Sn_YjesFMVfZI2QHCFXDZxY_GZayU",
+    authDomain: "madspildsregistrering.firebaseapp.com",
+    databaseURL: "https://madspildsregistrering-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "madspildsregistrering",
+    storageBucket: "madspildsregistrering.firebasestorage.app",
+    messagingSenderId: "344888789541",
+    appId: "1:344888789541:web:117c6bd0d22b395c184dcc",
+    measurementId: "G-ZCK8SMPN0C"
   };
 
   const app = initializeApp(firebaseConfig);
@@ -45,6 +46,8 @@
         logoutBtn.style.display = "inline-block";
         userInfo.textContent = "Logget ind som " + user.displayName;
         document.getElementById("app").style.display = "block";
+        // bind knap events (første gang)
+        bindUi();
         loadData();
       } else {
         currentUser = null;
@@ -71,28 +74,55 @@
       if (snapshot.exists()) {
         snapshot.val().forEach(row => addRow(row.beskrivelse, row.vaegt));
       } else {
-        addRow();
+        addRow(); // tom række som start
       }
+      updateSum();
+    }).catch(err => {
+      console.error("Fejl ved loadData:", err);
+      // stadig vis en tom række
+      const tbody = document.querySelector("#table tbody");
+      if (tbody.children.length === 0) addRow();
       updateSum();
     });
   }
 
   function addRow(beskrivelse = "", vaegt = "") {
+    const tbody = document.querySelector("#table tbody");
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><input type="text" value="${beskrivelse}" placeholder="Beskrivelse"></td>
-      <td><input type="number" step="0.01" value="${vaegt}" placeholder="kg" onchange="updateSum()"></td>
+      <td><input type="text" class="inp-beskrivelse" value="${escapeHtml(beskrivelse)}" placeholder="Beskrivelse"></td>
+      <td><input type="number" class="inp-vaegt" step="0.01" value="${escapeHtml(vaegt)}" placeholder="kg"></td>
+      <td style="width:70px; text-align:center;"><button type="button" class="del-row">✕</button></td>
     `;
-    document.querySelector("#table tbody").appendChild(tr);
+    tbody.appendChild(tr);
+
+    // bind event handlers på rækkerne (ingen inline handlers)
+    tr.querySelector('.inp-vaegt').addEventListener('input', updateSum);
+    tr.querySelector('.del-row').addEventListener('click', (e) => {
+      tr.remove();
+      updateSum();
+    });
+
+    updateSum();
+    return tr;
+  }
+
+  // simple escape to avoid injecting quotes into value attr
+  function escapeHtml(s){
+    if (s === undefined || s === null) return "";
+    return String(s).replace(/"/g, '&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   function updateSum() {
     let sum = 0;
     document.querySelectorAll("#table tbody tr").forEach(tr => {
-      const val = parseFloat(tr.cells[1].querySelector("input").value);
+      const el = tr.querySelector('.inp-vaegt');
+      const val = parseFloat(el.value);
       if (!isNaN(val)) sum += val;
     });
-    document.getElementById("sum").textContent = sum.toFixed(2);
+    const sumEl = document.getElementById("sum");
+    if (sumEl) sumEl.textContent = sum.toFixed(2);
+    return sum;
   }
 
   window.saveData = function() {
@@ -101,14 +131,21 @@
     const dateStr = formatDate(currentDate);
     const rows = [];
     document.querySelectorAll("#table tbody tr").forEach(tr => {
-      const beskrivelse = tr.cells[0].querySelector("input").value.trim();
-      const vaegt = parseFloat(tr.cells[1].querySelector("input").value.trim());
-      if (beskrivelse || !isNaN(vaegt)) rows.push({ beskrivelse, vaegt });
+      const beskrivelse = tr.querySelector('.inp-beskrivelse').value.trim();
+      const vaegtVal = tr.querySelector('.inp-vaegt').value.trim();
+      const vaegt = vaegtVal === "" ? null : parseFloat(vaegtVal);
+      if (beskrivelse !== "" || vaegt !== null) rows.push({ beskrivelse, vaegt });
     });
 
     set(ref(db, "madspild/" + dateStr), rows)
-      .then(() => alert("✅ Dagens registrering gemt!"))
-      .catch(err => alert("❌ Fejl: " + err));
+      .then(() => {
+        // pæn toast i stedet for alert
+        showToast("✅ Dagens registrering gemt!");
+      })
+      .catch(err => {
+        console.error(err);
+        alert("❌ Fejl: " + err);
+      });
   }
 
   window.prevDay = function() {
@@ -119,6 +156,38 @@
   window.nextDay = function() {
     currentDate.setDate(currentDate.getDate() + 1);
     loadData();
+  }
+
+  // bind UI-knapper (køres én gang efter DOM klaar og efter login)
+  function bindUi() {
+    // Beskyt mod dobbel-bind hvis function kaldes flere gange
+    if (bindUi._bound) return;
+    bindUi._bound = true;
+
+    const addBtn = document.getElementById("addBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const table = document.getElementById("table");
+
+    if (addBtn) addBtn.addEventListener('click', () => addRow());
+    if (saveBtn) saveBtn.addEventListener('click', saveData);
+    // delegated input update (fallback)
+    table.addEventListener('input', (e) => {
+      if (e.target && e.target.classList.contains('inp-vaegt')) updateSum();
+    });
+  }
+
+  // small toast
+  function showToast(message){
+    const toast = document.createElement("div");
+    toast.textContent = message;
+    Object.assign(toast.style, {
+      position: 'fixed', bottom: '20px', left: '50%', transform:'translateX(-50%)',
+      background:'#16a085', color:'#fff', padding:'10px 16px', borderRadius:'8px', zIndex:9999,
+      boxShadow:'0 4px 12px rgba(0,0,0,0.12)', opacity: '0', transition:'opacity .25s'
+    });
+    document.body.appendChild(toast);
+    requestAnimationFrame(()=> toast.style.opacity = '1');
+    setTimeout(()=> { toast.style.opacity = '0'; setTimeout(()=>toast.remove(),300); }, 2500);
   }
 
 </script>
@@ -133,6 +202,7 @@
   #prevBtn { background:#4f46e5; color:white; }
   #nextBtn { background:#22c55e; color:white; }
   #saveBtn { background:#f97316; color:white; display:block; margin:10px auto; }
+  #addBtn { background:#2ecc71; color:white; display:block; width:100%; padding:10px 16px; margin-top:10px; }
   #loginBtn { background:#2563eb; color:white; }
   #logoutBtn { background:#dc2626; color:white; }
   .sum { font-weight:bold; text-align:right; margin-top:10px; }
@@ -157,11 +227,14 @@
   </div>
 
   <table id="table">
-    <thead><tr><th>Beskrivelse</th><th>Vægt (kg)</th></tr></thead>
+    <thead><tr><th>Beskrivelse</th><th>Vægt (kg)</th><th style="width:70px;text-align:center">Slet</th></tr></thead>
     <tbody></tbody>
   </table>
+
+  <button id="addBtn">＋ Tilføj række</button>
+
   <div class="sum">Total: <span id="sum">0.00</span> kg</div>
-  <button id="saveBtn" onclick="saveData()">💾 Gem</button>
+  <button id="saveBtn">💾 Gem</button>
 </div>
 
 </body>
